@@ -6,6 +6,6 @@ import react from "@vitejs/plugin-react";
 // set `base` below to "/<repo-name>/" (with slashes on both sides).
 // If you're using a custom domain or deploying to the root, set it to "/".
 export default defineConfig({
-  base: "/rwef-dashboard/",
+  base: "/rwef-dashboard-v1/",
   plugins: [react()],
 });
