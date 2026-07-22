@@ -10,15 +10,21 @@ import {
   orderBy,
   serverTimestamp,
   limit,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase.js";
 
 /* ---------- Members ---------- */
 
-export function subscribeMembers(cb) {
-  return onSnapshot(collection(db, "members"), (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+export function subscribeMembers(cb, onError) {
+  return onSnapshot(
+    collection(db, "members"),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.error("subscribeMembers failed:", err);
+      onError?.(err);
+    }
+  );
 }
 
 // Adds a placeholder member (no login) — e.g. an occasional volunteer who
@@ -40,10 +46,15 @@ export async function updateMemberRole(memberId, role) {
 
 /* ---------- Programs ---------- */
 
-export function subscribePrograms(cb) {
-  return onSnapshot(collection(db, "programs"), (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+export function subscribePrograms(cb, onError) {
+  return onSnapshot(
+    collection(db, "programs"),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.error("subscribePrograms failed:", err);
+      onError?.(err);
+    }
+  );
 }
 
 export async function addProgram(name, color) {
@@ -52,10 +63,15 @@ export async function addProgram(name, color) {
 
 /* ---------- Tasks ---------- */
 
-export function subscribeTasks(cb) {
-  return onSnapshot(collection(db, "tasks"), (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+export function subscribeTasks(cb, onError) {
+  return onSnapshot(
+    collection(db, "tasks"),
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.error("subscribeTasks failed:", err);
+      onError?.(err);
+    }
+  );
 }
 
 export async function addTask(task) {
@@ -94,11 +110,16 @@ export async function addComment(taskId, authorId, authorName, text) {
 
 /* ---------- Live team chat ---------- */
 
-export function subscribeChat(cb, max = 200) {
+export function subscribeChat(cb, max = 200, onError) {
   const q = query(collection(db, "chat"), orderBy("ts", "asc"), limit(max));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => {
+      console.error("subscribeChat failed:", err);
+      onError?.(err);
+    }
+  );
 }
 
 export async function sendChatMessage(authorId, authorName, text) {
@@ -108,4 +129,27 @@ export async function sendChatMessage(authorId, authorName, text) {
     text,
     ts: serverTimestamp(),
   });
+}
+
+/* ---------- Member profile creation / self-repair ---------- */
+// Used both at registration time and as a repair path for accounts that
+// somehow ended up signed in without a matching member profile.
+export async function createMemberProfile(uid, name, title) {
+  let role = "associate";
+  try {
+    const existing = await getDocs(query(collection(db, "members"), limit(1)));
+    role = existing.empty ? "admin" : "associate";
+  } catch (e) {
+    // If this check fails for any reason, fall back to the safe default
+    // (associate) rather than blocking profile creation entirely.
+  }
+  await setDoc(doc(db, "members", uid), {
+    name,
+    title: title || "Team Member",
+    uid,
+    role,
+    placeholder: false,
+    createdAt: serverTimestamp(),
+  });
+  return role;
 }
