@@ -6,10 +6,14 @@ import { C, inputStyle } from "../theme.js";
 export default function ChatPanel({ me }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [error, setError] = useState("");
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    const unsub = subscribeChat(setMessages);
+    const unsub = subscribeChat(setMessages, 200, (err) => {
+      console.error("Chat failed to load:", err);
+      setError("Couldn't load chat — check your connection and try refreshing.");
+    });
     return unsub;
   }, []);
 
@@ -19,10 +23,21 @@ export default function ChatPanel({ me }) {
 
   const send = async (e) => {
     e.preventDefault();
-    if (!text.trim() || !me) return;
+    if (!text.trim()) return;
+    if (!me) {
+      setError("Your profile isn't fully set up yet, so messages can't send. Try refreshing the page.");
+      return;
+    }
     const t = text.trim();
+    setError("");
     setText("");
-    await sendChatMessage(me.id, me.name, t);
+    try {
+      await sendChatMessage(me.id, me.name, t);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      setError("That message didn't send — please try again.");
+      setText(t);
+    }
   };
 
   return (
@@ -33,6 +48,11 @@ export default function ChatPanel({ me }) {
       <p style={{ fontSize: 12.5, color: C.inkSoft, margin: "0 0 16px" }}>
         Quick team-wide messages. For anything longer, you've got WhatsApp and Gmail.
       </p>
+      {error && (
+        <div style={{ fontSize: 12.5, color: C.rust, background: C.rustTint, borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
       <div
         style={{
           flex: 1,
