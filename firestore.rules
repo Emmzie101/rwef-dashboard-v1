@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function myRole() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return isSignedIn() && myRole() == 'admin';
+    }
+    function isLeadOrAdmin() {
+      return isSignedIn() && (myRole() == 'admin' || myRole() == 'lead');
+    }
+
+    match /members/{memberId} {
+      allow read: if isSignedIn();
+      // Registering your own profile (doc id == your uid) is always allowed;
+      // an Admin can also create placeholder/guest members.
+      allow create: if isSignedIn() && (memberId == request.auth.uid || isAdmin());
+      // Only Admins change roles or remove members.
+      allow update, delete: if isAdmin();
+    }
+
+    match /programs/{programId} {
+      allow read: if isSignedIn();
+      allow create, update: if isLeadOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      // Edit if you're a Lead/Admin, or the task's owner or shadow.
+      allow update: if isSignedIn() && (
+        isLeadOrAdmin() ||
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.shadowId == request.auth.uid
+      );
+      // Delete if you're an Admin, or you're the task's owner.
+      allow delete: if isSignedIn() && (
+        isAdmin() || resource.data.ownerId == request.auth.uid
+      );
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+      }
+    }
+
+    match /chat/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+    }
+  }
+}
