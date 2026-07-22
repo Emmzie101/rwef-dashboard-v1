@@ -9,6 +9,7 @@ import ChatPanel from "./components/ChatPanel.jsx";
 import TaskFormModal from "./components/TaskFormModal.jsx";
 import TaskDetailModal from "./components/TaskDetailModal.jsx";
 import { AddMemberModal, AddProgramModal } from "./components/SmallModals.jsx";
+import CompleteProfileScreen from "./components/CompleteProfileScreen.jsx";
 import ManageTeamModal from "./components/ManageTeamModal.jsx";
 import { canManageMembers, canManagePrograms } from "./lib/permissions.js";
 import {
@@ -28,6 +29,7 @@ function Shell() {
   const { user } = useAuth();
 
   const [members, setMembers] = useState([]);
+  const [membersLoaded, setMembersLoaded] = useState(false);
   const [programs, setPrograms] = useState([]);
   const [tasks, setTasks] = useState([]);
 
@@ -41,11 +43,19 @@ function Shell() {
   const [showManageTeam, setShowManageTeam] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState(null);
 
+  const [dataError, setDataError] = useState("");
+
   useEffect(() => {
     if (!user) return;
-    const u1 = subscribeMembers(setMembers);
-    const u2 = subscribePrograms(setPrograms);
-    const u3 = subscribeTasks(setTasks);
+    const u1 = subscribeMembers(
+      (list) => {
+        setMembers(list);
+        setMembersLoaded(true);
+      },
+      () => setDataError("Couldn't load the team list — try refreshing.")
+    );
+    const u2 = subscribePrograms(setPrograms, () => setDataError("Couldn't load programs — try refreshing."));
+    const u3 = subscribeTasks(setTasks, () => setDataError("Couldn't load tasks — try refreshing."));
     return () => {
       u1();
       u2();
@@ -112,8 +122,19 @@ function Shell() {
 
   const activeTask = tasks.find((t) => t.id === activeTaskId) || null;
 
+  // Signed in, member list has loaded, but no matching profile exists yet —
+  // this happens if profile creation failed partway through at registration.
+  if (membersLoaded && user && !me) {
+    return <CompleteProfileScreen uid={user.uid} suggestedName={user.displayName} />;
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg }}>
+      {dataError && (
+        <div style={{ background: C.rustTint, color: C.rust, textAlign: "center", fontSize: 12.5, padding: "8px 12px" }}>
+          {dataError}
+        </div>
+      )}
       <TopBar
         me={me}
         search={search}
